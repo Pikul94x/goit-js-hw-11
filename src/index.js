@@ -1,82 +1,42 @@
-import Notiflix from 'notiflix';
+import { getImg } from './fetchImages';
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
-import './css/styles.css';
+import Notiflix from 'notiflix';
+import 'notiflix/dist/notiflix-3.2.5.min.css';
 
-import { fetchPhoto } from './fetchPoto';
-
-const button = document.querySelector('button');
-const search = document.querySelector('#search-form');
+const form = document.querySelector('.search-form');
+const input = document.querySelector('.input');
 const gallery = document.querySelector('.gallery');
-const loadMoreBtn = document.querySelector('.load-more');
-const perPage = 40;
-let page = 1;
-let searchQuery;
-loadMoreBtn.classList.add('is-hidden');
+const loadMoreBtn = document.querySelector('.load-more-btn');
 
-const handleSubmit = event => {
-  event.preventDefault();
-  gallery.innerHTML = '';
+let page;
+let displayedImages;
+
+form.addEventListener('submit', newSearch);
+loadMoreBtn.addEventListener('click', loadMoreImg);
+
+function newSearch(e) {
+  e.preventDefault();
+  loadMoreBtn.style.display = 'none';
   page = 1;
-  searchQuery = event.currentTarget.searchQuery.value.trim();
-  fetchPhoto(searchQuery, page, perPage)
-    .then(photos => {
-      if (photos.totalHits < perPage) {
-        Notiflix.Notify.success(`We found ${photos.totalHits} results`, {
-          timeout: 1000,
-        });
-        drawPhotos(photos);
-        setTimeout(warning, 1500);
-      } else {
-        proceed(photos);
-      }
-    })
-    .catch(error);
-};
-
-function onEntry(entries, observer) {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      fetchPhoto(searchQuery, page, perPage).then(photos => {
-        let totalPages = photos.totalHits / perPage;
-        if (page >= totalPages) {
-          warning();
-        }
-        drawPhotos(photos);
-      });
-      page += 1;
-    }
-  });
+  gallery.innerHTML = '';
+  fetchImg();
 }
 
-search.addEventListener('submit', handleSubmit);
-
-const observer = new IntersectionObserver(onEntry, {
-  root: null,
-  rootMargin: '0px',
-  threshold: 0.5,
-});
-observer.observe(loadMoreBtn);
-
-function proceed(photos) {
-  drawPhotos(photos);
-  page += 1;
-  loadMoreBtn.classList.remove('is-hidden');
-  Notiflix.Notify.success(`We found ${photos.totalHits} results`, {
-    timeout: 1000,
-  });
+function loadMoreImg() {
+  page++;
+  fetchImg();
 }
 
-function warning() {
-  loadMoreBtn.classList.add('is-hidden');
-  Notiflix.Notify.warning(
-    "Were sorry, but you've reached the end of search results.",
-    { timeout: 1000 }
-  );
+function fetchImg() {
+  getImg(input.value.trim(), page)
+    .then(res => renderImg(res))
+    .catch(error => error);
 }
 
-function drawPhotos(photos) {
-  const markup = photos.hits
+function renderImg({ hits, totalHits }) {
+  console.log(hits);
+  const markup = hits
     .map(
       ({
         webformatURL,
@@ -88,36 +48,53 @@ function drawPhotos(photos) {
         downloads,
       }) =>
         `<div class="photo-card">
-    <a href="${largeImageURL}">
-  <img src="${webformatURL}" alt="${tags}" loading="lazy" />
-    </a>
+  <a href="${largeImageURL}"><img class="img" src="${webformatURL}" alt="${tags}" loading="lazy" /></a>
   <div class="info">
-      <p class="info-item">
-          <b>Likes</b> ${likes}
-      </p>
-      <p class="info-item">
-          <b>Views</b> ${views}
-      </p>
-      <p class="info-item">
-          <b>Comments</b> ${comments}
-      </p>
-      <p class="info-item">
-          <b>Downloads</b> ${downloads}
-      </p>
+    <p class="info-item">
+      <b>Likes</b>
+      ${likes}
+    </p>
+    <p class="info-item">
+      <b>Views</b>
+      ${views}
+    </p>
+    <p class="info-item">
+      <b>Comments</b>
+      ${comments}
+    </p>
+    <p class="info-item">
+      <b>Downloads</b>
+      ${downloads}
+    </p>
   </div>
 </div>`
     )
     .join('');
+
   gallery.insertAdjacentHTML('beforeend', markup);
-  lghtbx();
+
+  const lightbox = new SimpleLightbox('.gallery a');
+
+  displayedImages = totalHits - page * 40;
+  checkingLeftImages();
+
+  if (displayedImages <= 0) {
+    Notiflix.Notify.failure(
+      'Sorry, there are no images matching your search query. Please try again.'
+    );
+  } else if (displayedImages > 0 && displayedImages === totalHits) {
+    Notiflix.Notify.info(
+      "We're sorry, but you've reached the end of search results."
+    );
+  } else if (displayedImages > 0 && page === 1) {
+    Notiflix.Notify.success(`Hooray! We found ${totalHits} images.`);
+  }
 }
 
-function error(error) {
-  loadMoreBtn.classList.add('is-hidden');
-}
-
-function lghtbx() {
-  const lightbox = new SimpleLightbox('.photo-card a');
-  lightbox.on('show.simplelightbox');
-  lightbox.refresh();
+function checkingLeftImages() {
+  if (page === 0) {
+    loadMoreBtn.style.display = 'none';
+  } else {
+    loadMoreBtn.style.display = 'block';
+  }
 }
